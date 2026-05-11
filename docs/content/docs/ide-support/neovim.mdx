@@ -1,0 +1,144 @@
+---
+title: "Neovim"
+description: "Set up Tolk, TASM, Fift, TL-B and Acton.toml support in Neovim"
+---
+
+Neovim does not ship a dedicated Acton plugin, but the `acton` CLI bundles a Language
+Server (LSP), and the repository contains a tree-sitter grammar for Tolk. The two pieces
+together give you completion, diagnostics, hover documentation, and syntax highlighting.
+
+This page describes a minimal setup that works on Neovim 0.10+. It assumes `acton` is
+already installed and available on your `PATH` — see the [installation guide](/docs/installation).
+
+## File type detection
+
+Neovim does not know about Tolk, TASM, TL-B, or Fift extensions by default. Add the
+following to your config (for example, `~/.config/nvim/lua/acton.lua`, then `require("acton")`
+from `init.lua`):
+
+```lua
+vim.filetype.add({
+  extension = {
+    tolk = "tolk",
+    tasm = "tasm",
+    tlb  = "tlb",
+    fif  = "fift",
+    fift = "fift",
+  },
+  filename = {
+    ["Acton.toml"] = "toml",
+  },
+})
+```
+
+## Language server
+
+The `acton` binary exposes the language server through the `acton ls --stdio` subcommand.
+Configure it once and Neovim will attach to every supported buffer.
+
+### Neovim 0.11+
+
+Use the built-in `vim.lsp.config` API:
+
+```lua
+vim.lsp.config["acton"] = {
+  cmd = { "acton", "ls", "--stdio" },
+  filetypes = { "tolk", "tasm", "tlb", "fift", "toml" },
+  root_markers = { "Acton.toml", ".git" },
+}
+
+vim.lsp.enable("acton")
+```
+
+### Neovim 0.10 with nvim-lspconfig
+
+If you are on an older release, register the server through
+[`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig):
+
+```lua
+local configs = require("lspconfig.configs")
+local lspconfig = require("lspconfig")
+
+if not configs.acton then
+  configs.acton = {
+    default_config = {
+      cmd = { "acton", "ls", "--stdio" },
+      filetypes = { "tolk", "tasm", "tlb", "fift", "toml" },
+      root_dir = lspconfig.util.root_pattern("Acton.toml", ".git"),
+      single_file_support = true,
+    },
+  }
+end
+
+lspconfig.acton.setup({})
+```
+
+<Callout type="info" title="Scoping the TOML attachment">
+  The server only needs to attach to `Acton.toml`, not every TOML file in your project.
+  If you already have a different TOML language server, remove `"toml"` from `filetypes`
+  and attach `acton` to `Acton.toml` from an autocommand instead:
+
+  ```lua
+  vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+    pattern = "Acton.toml",
+    callback = function(args)
+      vim.lsp.start({
+        name = "acton",
+        cmd = { "acton", "ls", "--stdio" },
+        root_dir = vim.fs.root(args.buf, { "Acton.toml", ".git" }),
+      })
+    end,
+  })
+  ```
+</Callout>
+
+### Verifying the setup
+
+Open a `.tolk` file or `Acton.toml` and run `:LspInfo` (Neovim 0.10) or `:checkhealth lsp`
+(0.11+). You should see a client named `acton` attached to the buffer. Diagnostics from
+`acton check`, completion, and hover will start working immediately.
+
+## Syntax highlighting
+
+The repository ships a tree-sitter grammar for Tolk together with highlight queries.
+The grammar is not in the `nvim-treesitter` registry, so it has to be registered as a
+custom parser. Add the following before calling `nvim-treesitter`'s `setup`:
+
+```lua
+local parser_config = require("nvim-treesitter.parsers").get_parser_configs()
+
+parser_config.tolk = {
+  install_info = {
+    url = "https://github.com/ton-blockchain/acton",
+    files = { "crates/tree-sitter-tolk/src/parser.c" },
+    branch = "master",
+    generate_requires_npm = false,
+    requires_generate_from_grammar = false,
+  },
+  filetype = "tolk",
+}
+```
+
+Install it with `:TSInstall tolk` and copy the bundled highlight queries to your
+runtime path so Neovim can find them:
+
+```sh
+mkdir -p ~/.config/nvim/queries/tolk
+curl -fsSL \
+  https://raw.githubusercontent.com/ton-blockchain/acton/master/crates/tree-sitter-tolk/queries/highlights.scm \
+  -o ~/.config/nvim/queries/tolk/highlights.scm
+```
+
+Grammars for TASM, TL-B, and Fift live under `crates/tree-sitter-tasm`,
+`crates/tree-sitter-tlb`, and `crates/tree-sitter-fift` and can be registered the same way,
+but they do not yet ship highlight queries — only parsing is available.
+
+## What works today
+
+- Completion, hover, go-to-definition, and rename through the language server.
+- `acton check` diagnostics in `.tolk` files, with quick fixes via `vim.lsp.buf.code_action()`.
+- Schema completion and validation in `Acton.toml`.
+- Tree-sitter highlighting for Tolk source.
+
+Test running, debugging, coverage, and the wallets view are currently exclusive to the
+VS Code and JetBrains plugins.
