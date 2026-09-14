@@ -65,8 +65,7 @@ jobs:
 
           if [[ -n "${BASE_SHA}" ]] &&
              ! git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- packages/ &&
-             git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- . ':(exclude)packages/**' &&
-             git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- packages/abi-go/
+             git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- . ':(exclude)packages/**'
           then
             packages_only=true
           fi
@@ -88,11 +87,10 @@ jobs:
           tool: just@1.58.0,nextest@0.9.143
           fallback: none
 
-      - name: Set up Go for bundled wrapper integration tests
+      - name: Set up Go for wrapper integration tests
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: packages/abi-go/go.mod
-          cache-dependency-path: packages/abi-go/go.sum
+          go-version: "1.26.3"
 
       - name: Download TON objects archive
         env:
@@ -325,8 +323,7 @@ jobs:
 
           if [[ -n "${BASE_SHA}" ]] &&
              ! git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- packages/ &&
-             git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- . ':(exclude)packages/**' &&
-             git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- packages/abi-go/
+             git diff --quiet "${BASE_SHA}" "${GITHUB_SHA}" -- . ':(exclude)packages/**'
           then
             packages_only=true
           fi
@@ -348,11 +345,10 @@ jobs:
           tool: just@1.58.0,nextest@0.9.143
           fallback: none
 
-      - name: Set up Go for bundled wrapper integration tests
+      - name: Set up Go for wrapper integration tests
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: packages/abi-go/go.mod
-          cache-dependency-path: packages/abi-go/go.sum
+          go-version: "1.26.3"
 
       - name: Download TON objects archive
         env:
