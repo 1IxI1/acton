@@ -4,16 +4,10 @@ set -eu
 [ "$1" = "run" ]
 [ "$2" = "-mod=readonly" ]
 [ "$3" = "-trimpath" ]
-[ "$4" = "./cmd/tolk-abi-to-go" ]
+[ "$4" = "github.com/ton-blockchain/tolk-abi-to-go/cmd/tolk-abi-to-go@v0.1.0" ]
 [ "$CGO_ENABLED" = "0" ]
 [ "$GOWORK" = "off" ]
 [ "$GOFLAGS" = " " ]
-[ -f go.mod ]
-[ -f go.sum ]
-[ -f LICENSE ]
-[ -f codegen/generate.go ]
-[ -f cmd/tolk-abi-to-go/main.go ]
-grep -q '^module github.com/ton-blockchain/acton/packages/abi-go$' go.mod
 if [ -n "${ACTON_TEST_GO_WORKDIR:-}" ]; then
     pwd -P > "$ACTON_TEST_GO_WORKDIR"
 fi

@@ -56,6 +56,9 @@ mod go {
     use std::os::unix::fs::PermissionsExt;
 
     const CATALOG: &str = r#"{"schemaVersion":1,"contracts":[]}"#;
+    // Mirrors GO_VERSION in src/commands/wrapper/go.rs, which tracks the `go`
+    // directive of the published generator module.
+    const GO_VERSION: &str = "1.26.3";
 
     fn setup_generator(project: &Project) -> String {
         let bin = project.path().join("bin with spaces");
@@ -375,7 +378,7 @@ fun onInternalMessage(_: InMessage) {}
         let module = fs::read_to_string(dir.join("module-path.txt")).unwrap();
         assert!(
             !Path::new(module.trim()).exists(),
-            "temporary Go module must be removed"
+            "temporary Go working directory must be removed"
         );
         assert!(!project.path().join("tests/counter.test.tolk").exists());
         assert!(!project.path().join("wrappers/Counter.gen.tolk").exists());
@@ -666,7 +669,7 @@ package = "not_used_for_all"
         let module = fs::read_to_string(capture).unwrap();
         assert!(
             !Path::new(module.trim()).exists(),
-            "failed Go run must clean up its module"
+            "failed Go run must clean up its working directory"
         );
     }
 
@@ -718,7 +721,7 @@ package = "not_used_for_all"
     }
 
     #[test]
-    fn test_go_wrapper_bundled_generator_end_to_end() {
+    fn test_go_wrapper_published_generator_end_to_end() {
         use std::process::Command;
         let go_env = match Command::new("go")
             .args(["env", "-json", "GOCACHE", "GOMODCACHE"])
@@ -728,10 +731,12 @@ package = "not_used_for_all"
             Err(error)
                 if error.kind() == std::io::ErrorKind::NotFound && env::var_os("CI").is_none() =>
             {
-                eprintln!("Skipping bundled Go E2E: install Go to run this test (required in CI)");
+                eprintln!(
+                    "Skipping Go generator E2E: install Go to run this test (required in CI)"
+                );
                 return;
             }
-            result => result.expect("Go must be installed for bundled generator E2E"),
+            result => result.expect("Go must be installed for the generator E2E"),
         };
         assert!(
             go_env.status.success(),
@@ -741,25 +746,20 @@ package = "not_used_for_all"
         let go_env: Value = serde_json::from_slice(&go_env.stdout).unwrap();
         let cache = go_env["GOCACHE"].as_str().unwrap();
         let module_cache = go_env["GOMODCACHE"].as_str().unwrap();
-        let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("packages/abi-go");
-        // Only the consumer test uses a local replacement to exercise this checkout's runtime.
-        // Wrapper generation must run entirely from the sources embedded in the Acton binary.
+        // Only the consumer module depends on the published runtime. Wrapper generation
+        // must run entirely from the pinned published generator module, never from the
+        // caller's module graph.
         let go_mod = format!(
-            "module wrappertest\n\ngo {}\n\nrequire github.com/ton-blockchain/acton/packages/abi-go v0.0.0\n\nreplace github.com/ton-blockchain/acton/packages/abi-go => {:?}\n",
-            env!("ACTON_ABI_GO_VERSION"),
-            runtime.to_str().unwrap()
+            "module wrappertest\n\ngo {GO_VERSION}\n\nrequire github.com/ton-blockchain/tolk-abi-to-go v0.1.0\n"
         );
-        let alternate_mod = format!(
-            "module example.com/caller\n\ngo {}\n",
-            env!("ACTON_ABI_GO_VERSION")
-        );
+        let alternate_mod = format!("module example.com/caller\n\ngo {GO_VERSION}\n");
         // Read at run time: include_str! would compile the whole 4.9 MB bundle
         // into the test binary only for the one entry kept below.
         let bundle = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("crates/acton-abi-catalog/data/data-abis.json");
         let mut catalog: Value = serde_json::from_slice(&fs::read(&bundle).unwrap()).unwrap();
         catalog["contracts"].as_array_mut().unwrap().truncate(1);
-        let project = ProjectBuilder::new("go_bundled_e2e")
+        let project = ProjectBuilder::new("go_published_e2e")
             .contract("first", PRECOMPILED_RUNTIME_CONTRACT)
             .contract("second", PRECOMPILED_RUNTIME_CONTRACT)
             .raw_file("catalog.json", &serde_json::to_string(&catalog).unwrap())
@@ -837,7 +837,7 @@ package = "not_used_for_all"
             let result = command.output().unwrap();
             assert!(
                 result.status.success(),
-                "bundled generator with caller Go flags:\n{}\n{}",
+                "published generator with caller Go flags:\n{}\n{}",
                 String::from_utf8_lossy(&result.stdout),
                 String::from_utf8_lossy(&result.stderr)
             );

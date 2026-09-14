@@ -7,7 +7,7 @@ import (
 	"wrappertest/all"
 	"wrappertest/single"
 
-	acton "github.com/ton-blockchain/acton/packages/abi-go"
+	tolkabi "github.com/ton-blockchain/tolk-abi-to-go"
 )
 
 func TestGeneratedBindings(t *testing.T) {
@@ -33,7 +33,7 @@ func TestGeneratedBindings(t *testing.T) {
 	if err != nil || len(args) != 0 {
 		t.Fatalf("getter args: %#v, %v", args, err)
 	}
-	result, err := getter.DecodeResult([]acton.StackValue{{Type: "int", Value: "42"}})
+	result, err := getter.DecodeResult([]tolkabi.StackValue{{Type: "int", Value: "42"}})
 	if err != nil || result != "42" {
 		t.Fatalf("getter result: %#v, %v", result, err)
 	}

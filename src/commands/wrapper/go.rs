@@ -3,10 +3,12 @@ use anyhow::Context;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::NamedTempFile;
 
-const GENERATOR_SOURCES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/go-generator.tar.zst"));
-const GO_VERSION: &str = env!("ACTON_ABI_GO_VERSION");
+const GO_WRAPPER_MODULE: &str =
+    "github.com/ton-blockchain/tolk-abi-to-go/cmd/tolk-abi-to-go@v0.1.0";
+// Tracks the `go` directive of the pinned generator module above.
+const GO_VERSION: &str = "1.26.3";
 
 pub fn go_wrapper_cmd(
     contract_id: Option<&str>,
@@ -83,28 +85,21 @@ fn resolve_settings(
     (output_dir, package)
 }
 
-fn unpack_generator() -> anyhow::Result<TempDir> {
-    let dir = tempfile::Builder::new()
-        .prefix("acton-go-")
-        .tempdir()
-        .context("Failed to create temporary Go generator directory")?;
-    let decoder = zstd::stream::read::Decoder::new(GENERATOR_SOURCES)
-        .context("Failed to decompress bundled Go generator")?;
-    tar::Archive::new(decoder)
-        .unpack(dir.path())
-        .context("Failed to unpack bundled Go generator")?;
-    Ok(dir)
-}
-
 fn run_generator(catalog: &Path, output_dir: &Path, package: &str) -> anyhow::Result<()> {
-    // CLI paths belong to the caller, not to the temporary Go module. Output may
+    // CLI paths belong to the caller, not to the working directory below. Output may
     // not exist yet, so resolve lexically rather than canonicalizing on disk.
     let catalog = std::path::absolute(catalog).context("Failed to resolve catalog path")?;
     let output_dir =
         std::path::absolute(output_dir).context("Failed to resolve Go output directory")?;
-    let module = unpack_generator()?;
+    // `go run pkg@version` ignores the go.mod of the current directory and every
+    // parent, so no module has to be unpacked. An empty directory is still used so
+    // that nothing in a caller's workspace can influence the generator run.
+    let workdir = tempfile::Builder::new()
+        .prefix("acton-go-")
+        .tempdir()
+        .context("Failed to create temporary Go working directory")?;
     let status = Command::new("go")
-        .args(["run", "-mod=readonly", "-trimpath", "./cmd/tolk-abi-to-go"])
+        .args(["run", "-mod=readonly", "-trimpath", GO_WRAPPER_MODULE])
         .arg("--catalog").arg(&catalog)
         .arg("--output-dir").arg(&output_dir)
         .arg("--package").arg(package)
@@ -112,16 +107,16 @@ fn run_generator(catalog: &Path, output_dir: &Path, package: &str) -> anyhow::Re
         .env("GOWORK", "off")
         // Go treats an empty GOFLAGS as unset and falls back to persistent GOENV
         // defaults. A nonempty whitespace value parses as no flags, preventing a
-        // caller's -modfile or other build flags from changing this private module.
+        // caller's -modfile or other build flags from changing this generator run.
         .env("GOFLAGS", " ")
-        .current_dir(module.path())
+        .current_dir(workdir.path())
         .status()
         .with_context(|| format!(
-            "Failed to run Go for Acton's bundled wrapper generator. Install Go {GO_VERSION} or newer from https://go.dev/dl/ and ensure `go` is on PATH. No separate generator installation is required."
+            "Failed to run Go for Acton's wrapper generator. Install Go {GO_VERSION} or newer from https://go.dev/dl/ and ensure `go` is on PATH. Go downloads {GO_WRAPPER_MODULE} itself on first use."
         ))?;
     anyhow::ensure!(
         status.success(),
-        "Bundled Go wrapper generation failed with {status}. See Go output above for details. The generator requires Go {GO_VERSION} or newer (https://go.dev/dl/)."
+        "Go wrapper generation failed with {status}. See Go output above for details. The generator requires Go {GO_VERSION} or newer (https://go.dev/dl/)."
     );
     Ok(())
 }
@@ -159,47 +154,5 @@ mod tests {
             ),
             ("cwd/go".into(), "override".into())
         );
-    }
-
-    #[test]
-    fn bundled_go_module_contains_only_production_sources() {
-        let dir = unpack_generator().unwrap();
-        let manifest = std::fs::read_to_string(dir.path().join("go.mod")).unwrap();
-        assert!(manifest.contains("module github.com/ton-blockchain/acton/packages/abi-go"));
-        assert!(manifest.contains(&format!("go {GO_VERSION}")));
-        assert!(dir.path().join("go.sum").is_file());
-        assert_eq!(
-            std::fs::read(dir.path().join("LICENSE")).unwrap(),
-            include_bytes!(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/packages/abi-go/LICENSE"
-            ))
-        );
-        assert!(dir.path().join("cmd/tolk-abi-to-go/main.go").is_file());
-        assert!(dir.path().join("codegen/generate.go").is_file());
-        for entry in walkdir::WalkDir::new(dir.path())
-            .into_iter()
-            .map(Result::unwrap)
-        {
-            if !entry.file_type().is_file() {
-                continue;
-            }
-            let path = entry.path().strip_prefix(dir.path()).unwrap();
-            let name = path.file_name().unwrap().to_str().unwrap();
-            assert!(!name.ends_with("_test.go"), "{path:?}");
-            assert!(
-                name == "go.mod" || name == "go.sum" || name == "LICENSE" || name.ends_with(".go"),
-                "{path:?}"
-            );
-            assert!(
-                [
-                    Path::new(""),
-                    Path::new("codegen"),
-                    Path::new("cmd/tolk-abi-to-go")
-                ]
-                .contains(&path.parent().unwrap()),
-                "{path:?}"
-            );
-        }
     }
 }
