@@ -170,14 +170,16 @@ single package. `--catalog FILE --go` skips compilation and works without
 `Acton.toml`. Do not combine multiple contracts by repeatedly generating single
 contracts into the same output directory; use `--all` or a catalog instead.
 
-The generator's Go sources are bundled in the Acton binary and run from a temporary
-module with `go run -mod=readonly -trimpath`, `CGO_ENABLED=0`, and `GOWORK=off`.
-Caller `GOFLAGS` and saved build-flag defaults are ignored. Your `go.mod` and
-workspace are not modified. Standard Go caches are reused; first use may download
-pinned dependencies such as `tonutils-go`.
+The generator is fetched from the pinned published module
+`github.com/ton-blockchain/tolk-abi-to-go/cmd/tolk-abi-to-go@v0.1.0` on first use and
+runs from an empty temporary directory with `go run -mod=readonly -trimpath`,
+`CGO_ENABLED=0`, and `GOWORK=off`. Caller `GOFLAGS` and saved build-flag defaults are
+ignored. Your `go.mod` and workspace are not read or modified. Standard Go caches are
+reused; first use downloads the generator and pinned dependencies such as
+`tonutils-go`.
 
 Generated files use the public, CGO-free
-`github.com/ton-blockchain/acton/packages/abi-go` runtime (package `acton`).
+`github.com/ton-blockchain/tolk-abi-to-go` runtime (package `tolkabi`).
 See [Go generation](/docs/commands/wrapper#go-generation) for toolchain requirements,
 runtime dependencies, and unsupported-codec diagnostics.
 

@@ -103,8 +103,9 @@ Conflicts with \fB\-\-go\fR and test stub generation.
 .sp
 \fB\-\-go\fR
 .RS 4
-Generate Go types, cell codecs, and getter codecs using Acton\[cq]s bundled generator.
-Requires a Go toolchain on \fBPATH\fR; no separate generator installation is needed.
+Generate Go types, cell codecs, and getter codecs using Acton\[cq]s published generator
+module. Requires a Go toolchain on \fBPATH\fR; no separate generator installation is
+needed.
 .sp
 Conflicts with \fB\-\-ts\fR, \fB\-\-output\fR, \fB\-\-test\fR, \fB\-\-test\-output\fR, and \fB\-\-test\-output\-dir\fR\&.
 Configured Tolk test\-stub defaults do not apply to Go generation.
@@ -239,27 +240,29 @@ Do not put dependencies on the BoC contract itself: it is already compiled.
 Instead, put \fBdepends = ["Precompiled"]\fR on the \fB\&.tolk\fR contract that needs the
 BoC code.
 .SH "GO GENERATION"
-Acton ships its own Go generator sources from \fBpackages/abi\-go\fR inside the Acton
-binary. Install Go from https://go.dev/dl/ and ensure \fBgo\fR is on \fBPATH\fR\&. Use a Go
-version meeting the bundled module\[cq]s \fBgo.mod\fR requirement; an execution failure
-reports the required version. No separate helper installation is needed.
+Acton runs the generator from the pinned published module
+\fBgithub.com/ton\-blockchain/tolk\-abi\-to\-go/cmd/tolk\-abi\-to\-go@v0.1.0\fR\&. Install Go
+from https://go.dev/dl/ and ensure \fBgo\fR is on \fBPATH\fR\&. Use a Go version meeting the
+pinned module\[cq]s \fBgo.mod\fR requirement; an execution failure reports the required
+version. No separate helper installation is needed: Go fetches the module itself on
+first use, the same way \fBnpx\fR fetches the TypeScript generator.
 .sp
-For each invocation, Acton extracts the bundled module to a temporary directory
-and runs \fBgo run \-mod=readonly \-trimpath ./cmd/tolk\-abi\-to\-go\fR there with
-\fBCGO_ENABLED=0\fR and \fBGOWORK=off\fR\&. Caller \fBGOFLAGS\fR, including saved Go environment
-defaults, are ignored for this private module; proxy, cache, and toolchain settings
-are retained. The directory is removed afterward, including when Go fails. No
-checkout or helper source download is needed. The Go toolchain uses its standard
-module and build caches; first use may download pinned dependencies from the
-bundled \fBgo.mod\fR and \fBgo.sum\fR, including \fBtonutils\-go\fR\&. Offline use requires those
-dependencies and a compatible Go toolchain to be cached already.
-The source archive includes the module\[cq]s original license notice. \fB\-trimpath\fR
-allows compiled generator packages to be reused across temporary extraction paths.
+For each invocation, Acton runs
+\fBgo run \-mod=readonly \-trimpath github.com/ton\-blockchain/tolk\-abi\-to\-go/cmd/tolk\-abi\-to\-go@v0.1.0\fR
+from an empty temporary directory with \fBCGO_ENABLED=0\fR and \fBGOWORK=off\fR\&. A pinned
+\fBpkg@version\fR run ignores the \fBgo.mod\fR of the current directory and every parent.
+Caller \fBGOFLAGS\fR, including saved Go environment defaults, are ignored for this
+run; proxy, cache, and toolchain settings are retained. The temporary directory is
+removed afterward, including when Go fails. The Go toolchain uses its standard
+module and build caches; first use downloads the generator and its pinned
+dependencies, including \fBtonutils\-go\fR\&. Offline use requires those dependencies and
+a compatible Go toolchain to be cached already. \fB\-trimpath\fR allows compiled
+generator packages to be reused across temporary working directories.
 .sp
-Generated files import \fBgithub.com/ton\-blockchain/acton/packages/abi\-go\fR (package
-\fBacton\fR). This Acton\-owned runtime does not require CGO or Toncenter modules. Add
-it at a compatible pinned revision to the consuming Go project. Acton does not
-read or modify the caller\[cq]s \fBgo.mod\fR, \fBgo.sum\fR, or Go workspace to run its generator.
+Generated files import \fBgithub.com/ton\-blockchain/tolk\-abi\-to\-go\fR (package
+\fBtolkabi\fR). This runtime does not require CGO or Toncenter modules. Add it at a
+compatible pinned version to the consuming Go project. Acton does not read or
+modify the caller\[cq]s \fBgo.mod\fR, \fBgo.sum\fR, or Go workspace to run its generator.
 .sp
 Project generation passes one temporary catalog containing the selected contract
 IDs, code hashes, and compiler ABIs to the generator. \fB\-\-all\fR compiles every
